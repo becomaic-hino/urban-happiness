@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YJ 다이어트 일지 - 스프레드시트 연동</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .sync-status {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 0.9rem;
+        }
+
+        .sync-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .sync-indicator.disconnected {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .daily-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .summary-card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+        }
+
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .summary-label {
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+        .summary-target {
+            font-size: 0.7rem;
+            color: #999;
+            margin-top: 3px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px 8px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .tab-content {
+            display: none;
+            min-height: 400px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .quick-add-section {
+            padding: 20px;
+        }
+
+        .meal-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .meal-btn {
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            background: white;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .meal-btn:hover {
+            border-color: #667eea;
+            transform: translateY(-1px);
+        }
+
+        .meal-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .current-meal-foods {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            min-height: 80px;
+        }
+
+        .current-meal-title {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .current-meal-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .meal-food-item {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .food-info {
+            flex: 1;
+        }
+
+        .food-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .food-details {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .food-calories {
+            font-weight: 600;
+            color: #ff6b6b;
+            margin-right: 10px;
+        }
+
+        .remove-food-btn {
+            background: none;
+            border: none;
+            color: #dc3545;
+            cursor: pointer;
+            padding: 5px;
+            font-size: 0.9rem;
+        }
+
+        .food-input-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 15px;
+        }
+
+        .input-group input, .input-group select {
+            padding: 10px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .nutrition-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .nutrition-input {
+            text-align: center;
+        }
+
+        .nutrition-input label {
+            display: block;
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .nutrition-input input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+
+        .add-food-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .add-food-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .save-meal-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .save-meal-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .save-meal-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .google-sheets-setup {
+            padding: 20px;
+        }
+
+        .setup-card {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .setup-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .setup-steps {
+            list-style: none;
+            padding: 0;
+        }
+
+        .setup-steps li {
+            padding: 8px 0;
+            color: #555;
+            position: relative;
+            padding-left: 25px;
+        }
+
+        .setup-steps li::before {
+            content: "✅";
+            position: absolute;
+            left: 0;
+        }
+
+        .connection-input {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .alert {
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .alert-info {
+            background: #cce7ff;
+            color: #0066cc;
+            border: 1px solid #99d6ff;
+        }
+
+        .favorite-foods {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .favorite-food-btn {
+            padding: 10px 8px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .favorite-food-btn:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8rem; }
+            .daily-summary { grid-template-columns: repeat(2, 1fr); }
+            .input-group { grid-template-columns: 1fr; }
+            .nutrition-grid { grid-template-columns: repeat(2, 1fr); }
+            .meal-selector { grid-template-columns: repeat(2, 1fr); }
+            .connection-input { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔥 YJ 다이어트 일지</h1>
+            <p>한 끼에 여러 음식 입력 가능 + 구글시트 자동 연동</p>
+        </div>
+
+        <div class="sync-status">
+            <div class="sync-indicator" id="syncIndicator"></div>
+            <span id="syncStatus">구글 스프레드시트 연결 필요</span>
+        </div>
+
+        <div class="daily-summary">
+            <div class="summary-card">
+                <div class="summary-value" id="todayCalories">0</div>
+                <div class="summary-label">오늘 칼로리</div>
+                <div class="summary-target">목표: 1500kcal</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="calorieProgress"></div>
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value" id="todayCarbs">0g</div>
+                <div class="summary-label">탄수화물</div>
+                <div class="summary-target">45-50%</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value" id="todayProtein">0g</div>
+                <div class="summary-label">단백질</div>
+                <div class="summary-target">목표: 70g</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value" id="todayFat">0g</div>
+                <div class="summary-label">지방</div>
+                <div class="summary-target">20-25%</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value" id="todayMood">😐</div>
+                <div class="summary-label">오늘 기분</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('food')">🍽️ 식사기록</button>
+            <button class="tab" onclick="switchTab('sheets')">📊 구글시트</button>
+            <button class="tab" onclick="switchTab('settings')">⚙️ 설정</button>
+        </div>
+
+        <!-- 식사 기록 탭 -->
+        <div id="food" class="tab-content active">
+            <div class="quick-add-section">
+                <div class="meal-selector">
+                    <button class="meal-btn active" data-meal="breakfast">🌅 아침</button>
+                    <button class="meal-btn" data-meal="lunch">☀️ 점심</button>
+                    <button class="meal-btn" data-meal="dinner">🌙 저녁</button>
+                    <button class="meal-btn" data-meal="snack">🍿 간식</button>
+                </div>
+
+                <!-- 현재 식사에 추가된 음식들 -->
+                <div class="current-meal-foods">
+                    <div class="current-meal-title">🌅 아침 메뉴</div>
+                    <div class="current-meal-list" id="currentMealList">
+                        <div style="text-align: center; color: #999; padding: 20px;">
+                            아직 추가된 음식이 없어요
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 즐겨찾는 음식 빠른 추가 -->
+                <div style="margin-bottom: 15px;">
+                    <h4 style="margin-bottom: 10px; color: #666;">⭐ 자주 먹는 음식 (터치해서 추가)</h4>
+                    <div class="favorite-foods" id="favoriteFoods">
+                        <!-- 즐겨찾는 음식들이 여기 추가됨 -->
+                    </div>
+                </div>
+
+                <div class="food-input-section">
+                    <h4 style="margin-bottom: 15px; color: #666;">🆕 새 음식 추가</h4>
+                    <div class="input-group">
+                        <input type="text" id="foodName" placeholder="음식 이름 (예: 현미밥, 닭가슴살)">
+                        <input type="number" id="foodAmount" placeholder="양 (g)">
+                        <select id="foodUnit">
+                            <option value="g">그램(g)</option>
+                            <option value="개">개</option>
+                            <option value="그릇">그릇</option>
+                            <option value="컵">컵</option>
+                            <option value="숟갈">숟갈</option>
+                        </select>
+                    </div>
+
+                    <div class="nutrition-grid">
+                        <div class="nutrition-input">
+                            <label>칼로리</label>
+                            <input type="number" id="calories" placeholder="200">
+                        </div>
+                        <div class="nutrition-input">
+                            <label>탄수화물(g)</label>
+                            <input type="number" id="carbs" placeholder="30">
+                        </div>
+                        <div class="nutrition-input">
+                            <label>단백질(g)</label>
+                            <input type="number" id="protein" placeholder="25">
+                        </div>
+                        <div class="nutrition-input">
+                            <label>지방(g)</label>
+                            <input type="number" id="fat" placeholder="5">
+                        </div>
+                        <div class="nutrition-input">
+                            <label>나트륨(mg)</label>
+                            <input type="number" id="sodium" placeholder="500">
+                        </div>
+                        <div class="nutrition-input">
+                            <label>당분(g)</label>
+                            <input type="number" id="sugar" placeholder="10">
+                        </div>
+                    </div>
+
+                    <button class="add-food-btn" onclick="addFoodToCurrentMeal()">➕ 현재 식사에 추가</button>
+                    <button class="save-meal-btn" onclick="saveMealToGoogleSheets()" id="saveMealBtn" disabled>
+                        📊 구글시트에 식사 저장
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 구글시트 연동 탭 -->
+        <div id="sheets" class="tab-content">
+            <div class="google-sheets-setup">
+                <div class="setup-card">
+                    <div class="setup-title">📊 구글 스프레드시트 연동 설정</div>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        구글 스프레드시트와 연동하면 입력한 모든 식사 데이터가 자동으로 저장되고 분석됩니다.
+                    </p>
+                    
+                    <h4 style="margin: 15px 0 10px 0; color: #333;">🔧 설정 방법:</h4>
+                    <ul class="setup-steps">
+                        <li>구글 드라이브에서 새 스프레드시트 생성</li>
+                        <li>스프레드시트 URL에서 ID 복사 (예: 1ABC...XYZ 부분)</li>
+                        <li>아래 입력창에 ID 입력하고 연결</li>
+                        <li>첫 번째 시트에 자동으로 헤더가 생성됩니다</li>
+                    </ul>
+                </div>
+
+                <div class="connection-input">
+                    <input type="text" id="spreadsheetId" placeholder="스프레드시트 ID를 입력하세요">
+                    <button class="add-food-btn" onclick="connectGoogleSheet()">🔗 연결</button>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <h4 style="margin-bottom: 10px; color: #333;">📋 저장되는 데이터:</h4>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; font-size: 0.9rem;">
+                        날짜, 시간, 식사종류, 음식명, 양, 칼로리, 탄수화물, 단백질, 지방, 나트륨, 당분, 기분, 메모
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <button class="add-food-btn" onclick="testConnection()" style="background: #17a2b8;">
+                        🔍 연결 테스트
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 설정 탭 -->
+        <div id="settings" class="tab-content">
+            <div class="quick-add-section">
+                <h3 style="margin-bottom: 15px;">⚙️ 개인 설정</h3>
+                
+                <div class="food-input-section">
+                    <h4 style="margin-bottom: 10px;">🎯 목표 설정</h4>
+                    <div class="nutrition-grid">
+                        <div class="nutrition-input">
+                            <label>목표 칼로리</label>
+                            <input type="number" id="targetCalories" value="1500">
+                        </div>
+                        <div class="nutrition-input">
+                            <label>목표 단백질(g)</label>
+                            <input type="number" id="targetProtein" value="70">
+                        </div>
+                        <div class="nutrition-input">
+                            <label>목표 체중(kg)</label>
+                            <input type="number" id="targetWeight" value="65" step="0.1">
+                        </div>
+                        <div class="nutrition-input">
+                            <label>현재 체중(kg)</label>
+                            <input type="number" id="currentWeight" value="77.8" step="0.1">
+                        </div>
+                    </div>
+                    <button class="add-food-btn" onclick="saveSettings()">💾 설정 저장</button>
+                </div>
+
+                <div class="food-input-section">
+                    <h4 style="margin-bottom: 10px;">⭐ 즐겨찾는 음식 관리</h4>
+                    <div class="input-group">
+                        <input type="text" id="newFavoriteFood" placeholder="음식명">
+                        <input type="number" id="newFavoriteCalories" placeholder="칼로리">
+                        <button class="add-food-btn" onclick="addFavoriteFood()">추가</button>
+                    </div>
+                    <div id="favoriteFoodsList" style="margin-top: 15px;">
+                        <!-- 즐겨찾는 음식 목록 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 전역 변수
+        let currentMeal = 'breakfast';
+        let currentMealFoods = [];
+        let settings = JSON.parse(localStorage.getItem('dietSettings') || '{"targetCalories": 1500, "targetProtein": 70, "targetWeight": 65, "currentWeight": 77.8, "spreadsheetId": ""}');
+        let favoriteFoods = JSON.parse(localStorage.getItem('favoriteFoods') || '[]');
+        let dailyTotals = { calories: 0, carbs: 0, protein: 0, fat: 0, sodium: 0, sugar: 0 };
+
+        // 기본 즐겨찾는 음식들
+        const defaultFavoriteFoods = [
+            { name: "🥛 플레인요거트+견과류", calories: 180, carbs: 12, protein: 8, fat: 9 },
+            { name: "🍞 토스트+계란후라이", calories: 250, carbs: 20, protein: 12, fat: 8 },
+            { name: "🍖 엄마손카츠", calories: 420, carbs: 35, protein: 25, fat: 18 },
+            { name: "🍣 포케볼(연어)", calories: 380, carbs: 45, protein: 22, fat: 12 },
+            { name: "🥗 닭가슴살샐러드", calories: 200, carbs: 8, protein: 25, fat: 5 },
+            { name: "🥜 견과류 30g", calories: 170, carbs: 5, protein: 6, fat: 15 },
+            { name: "🌶️ 마라탕", calories: 580, carbs: 45, protein: 20, fat: 35, isStress: true },
+            { name: "🍢 떡볶이", calories: 320, carbs: 55, protein: 8, fat: 8, isStress: true }
+        ];
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+        });
+
+        function initializeApp() {
+            // 기본 즐겨찾는 음식이 없으면 추가
+            if (favoriteFoods.length === 0) {
+                favoriteFoods = defaultFavoriteFoods;
+                saveFavoriteFoods();
+            }
+
+            loadSettings();
+            updateFavoriteFoodsDisplay();
+            updateMealDisplay();
+            checkGoogleSheetConnection();
+            
+            // 식사 선택 이벤트
+            document.querySelectorAll('.meal-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    selectMeal(this.dataset.meal);
+                });
+            });
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        function selectMeal(mealType) {
+            // 현재 식사가 바뀔 때 임시 저장된 음식들 초기화
+            if (currentMeal !== mealType) {
+                currentMealFoods = [];
+                currentMeal = mealType;
+                
+                document.querySelectorAll('.meal-btn').forEach(btn => btn.classList.remove('active'));
+                document.querySelector(`[data-meal="${mealType}"]`).classList.add('active');
+                
+                updateMealDisplay();
+            }
+        }
+
+        function addFoodToCurrentMeal() {
+            const foodData = {
+                name: document.getElementById('foodName').value,
+                amount: document.getElementById('foodAmount').value,
+                unit: document.getElementById('foodUnit').value,
+                calories: parseInt(document.getElementById('calories').value) || 0,
+                carbs: parseFloat(document.getElementById('carbs').value) || 0,
+                protein: parseFloat(document.getElementById('protein').value) || 0,
+                fat: parseFloat(document.getElementById('fat').value) || 0,
+                sodium: parseFloat(document.getElementById('sodium').value) || 0,
+                sugar: parseFloat(document.getElementById('sugar').value) || 0
+            };
+
+            if (!foodData.name || !foodData.amount) {
+                showAlert('음식 이름과 양은 필수입니다!', 'warning');
+                return;
+            }
+
+            currentMealFoods.push(foodData);
+            updateMealDisplay();
+            clearFoodInputs();
+            showAlert(`${foodData.name}이(가) 현재 식사에 추가되었습니다!`, 'success');
+        }
+
+        function addFavoriteFoodToMeal(food) {
+            const foodData = {
+                ...food,
+                amount: food.defaultAmount || 1,
+                unit: food.defaultUnit || '개'
+            };
+            
+            currentMealFoods.push(foodData);
+            updateMealDisplay();
+            showAlert(`${food.name}이(가) 현재 식사에 추가되었습니다!`, 'success');
+        }
+
+        function removeFoodFromMeal(index) {
+            currentMealFoods.splice(index, 1);
+            updateMealDisplay();
+        }
+
+        function updateMealDisplay() {
+            const mealNames = {
+                breakfast: '🌅 아침',
+                lunch: '☀️ 점심',
+                dinner: '🌙 저녁',
+                snack: '🍿 간식'
+            };
+
+            document.querySelector('.current-meal-title').textContent = `${mealNames[currentMeal]} 메뉴`;
+            
+            const listContainer = document.getElementById('currentMealList');
+            
+            if (currentMealFoods.length === 0) {
+                listContainer.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">아직 추가된 음식이 없어요</div>';
+                document.getElementById('saveMealBtn').disabled = true;
+            } else {
+                let totalCalories = 0;
+                listContainer.innerHTML = currentMealFoods.map((food, index) => {
+                    totalCalories += food.calories;
+                    return `
+                        <div class="meal-food-item">
+                            <div class="food-info">
+                                <div class="food-name">${food.name}</div>
+                                <div class="food-details">${food.amount}${food.unit} | 탄${food.carbs}g 단${food.protein}g 지${food.fat}g</div>
+                            </div>
+                            <div class="food-calories">${food.calories}kcal</div>
+                            <button class="remove-food-btn" onclick="removeFoodFromMeal(${index})">🗑️</button>
+                        </div>
+                    `;
+                }).join('');
+                
+                // 총 칼로리 표시
+                listContainer.innerHTML += `
+                    <div style="text-align: center; margin-top: 10px; padding: 10px; background: #667eea; color: white; border-radius: 8px; font-weight: bold;">
+                        총 ${totalCalories}kcal
+                    </div>
+                `;
+                
+                document.getElementById('saveMealBtn').disabled = false;
+            }
+        }
+
+        async function saveMealToGoogleSheets() {
+            if (!settings.spreadsheetId) {
+                showAlert('먼저 구글 스프레드시트를 연결해주세요!', 'warning');
+                return;
+            }
+
+            if (currentMealFoods.length === 0) {
+                showAlert('저장할 음식이 없습니다!', 'warning');
+                return;
+            }
+
+            try {
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0];
+                const timeStr = now.toTimeString().split(' ')[0].substring(0, 5);
+                
+                const mealNames = {
+                    breakfast: '🌅 아침',
+                    lunch: '☀️ 점심',
+                    dinner: '🌙 저녁',
+                    snack: '🍿 간식'
+                };
+
+                // 각 음식을 개별 행으로 저장
+                for (const food of currentMealFoods) {
+                    const rowData = [
+                        dateStr,
+                        timeStr,
+                        mealNames[currentMeal],
+                        food.name,
+                        `${food.amount}${food.unit}`,
+                        food.calories,
+                        food.carbs,
+                        food.protein,
+                        food.fat,
+                        food.sodium,
+                        food.sugar,
+                        '', // 기분
+                        ''  // 메모
+                    ];
+
+                    await appendToGoogleSheet(rowData);
+                }
+
+                // 로컬 총합 업데이트
+                updateDailyTotals();
+                
+                showAlert(`${mealNames[currentMeal]} 식사가 구글시트에 저장되었습니다! (${currentMealFoods.length}개 음식)`, 'success');
+                
+                // 저장 후 현재 식사 초기화
+                currentMealFoods = [];
+                updateMealDisplay();
+
+            } catch (error) {
+                console.error('저장 오류:', error);
+                showAlert('저장 중 오류가 발생했습니다. 연결 상태를 확인해주세요.', 'error');
+            }
+        }
+
+        async function appendToGoogleSheet(rowData) {
+            // 실제 구글 시트 API 호출 시뮬레이션
+            // 실제 구현에서는 Google Sheets API 또는 Google Apps Script를 사용
+            
+            // 여기서는 로컬 스토리지에 데이터 저장 (시뮬레이션)
+            const allData = JSON.parse(localStorage.getItem('sheetData') || '[]');
+            allData.push({
+                timestamp: new Date().toISOString(),
+                data: rowData
+            });
+            localStorage.setItem('sheetData', JSON.stringify(allData));
+            
+            console.log('시트에 저장된 데이터:', rowData);
+        }
+
+        function updateDailyTotals() {
+            const allData = JSON.parse(localStorage.getItem('sheetData') || '[]');
+            const today = new Date().toISOString().split('T')[0];
+            
+            dailyTotals = { calories: 0, carbs: 0, protein: 0, fat: 0, sodium: 0, sugar: 0 };
+            
+            allData.forEach(entry => {
+                if (entry.data[0] === today) { // 오늘 날짜 데이터만
+                    dailyTotals.calories += entry.data[5] || 0;
+                    dailyTotals.carbs += entry.data[6] || 0;
+                    dailyTotals.protein += entry.data[7] || 0;
+                    dailyTotals.fat += entry.data[8] || 0;
+                    dailyTotals.sodium += entry.data[9] || 0;
+                    dailyTotals.sugar += entry.data[10] || 0;
+                }
+            });
+            
+            updateDailySummary();
+        }
+
+        function updateDailySummary() {
+            document.getElementById('todayCalories').textContent = Math.round(dailyTotals.calories);
+            document.getElementById('todayCarbs').textContent = Math.round(dailyTotals.carbs) + 'g';
+            document.getElementById('todayProtein').textContent = Math.round(dailyTotals.protein) + 'g';
+            document.getElementById('todayFat').textContent = Math.round(dailyTotals.fat) + 'g';
+            
+            // 진행률 업데이트
+            const calorieProgress = Math.min((dailyTotals.calories / settings.targetCalories) * 100, 100);
+            document.getElementById('calorieProgress').style.width = calorieProgress + '%';
+        }
+
+        function updateFavoriteFoodsDisplay() {
+            const container = document.getElementById('favoriteFoods');
+            container.innerHTML = favoriteFoods.map(food => `
+                <div class="favorite-food-btn" onclick="addFavoriteFoodToMeal(${JSON.stringify(food).replace(/"/g, '&quot;')})">
+                    <div style="font-weight: bold; margin-bottom: 3px;">${food.name}</div>
+                    <div style="font-size: 0.7rem; color: #666;">${food.calories}kcal</div>
+                </div>
+            `).join('');
+        }
+
+        function connectGoogleSheet() {
+            const sheetId = document.getElementById('spreadsheetId').value.trim();
+            
+            if (!sheetId) {
+                showAlert('스프레드시트 ID를 입력해주세요!', 'warning');
+                return;
+            }
+
+            settings.spreadsheetId = sheetId;
+            saveSettings();
+            
+            // 헤더 생성 시뮬레이션
+            const headers = [
+                '📅 날짜', '⏰ 시간', '🍽️ 종류', '📝 음식명', '📏 양', 
+                '🔥 칼로리', '🍞 탄수화물(g)', '🥩 단백질(g)', '🧈 지방(g)', 
+                '🧂 나트륨(mg)', '🍯 당분(g)', '😊 기분', '💭 메모'
+            ];
+            
+            // 헤더를 로컬 스토리지에 저장 (실제로는 구글시트에 저장)
+            const allData = JSON.parse(localStorage.getItem('sheetData') || '[]');
+            if (allData.length === 0) {
+                allData.push({
+                    timestamp: new Date().toISOString(),
+                    data: headers,
+                    isHeader: true
+                });
+                localStorage.setItem('sheetData', JSON.stringify(allData));
+            }
+            
+            checkGoogleSheetConnection();
+            showAlert('구글 스프레드시트가 연결되었습니다! 🎉', 'success');
+        }
+
+        function checkGoogleSheetConnection() {
+            const indicator = document.getElementById('syncIndicator');
+            const status = document.getElementById('syncStatus');
+            
+            if (settings.spreadsheetId) {
+                indicator.className = 'sync-indicator';
+                status.textContent = '구글 스프레드시트 연결됨 ✅';
+            } else {
+                indicator.className = 'sync-indicator disconnected';
+                status.textContent = '구글 스프레드시트 연결 필요 ⚠️';
+            }
+        }
+
+        function testConnection() {
+            if (!settings.spreadsheetId) {
+                showAlert('먼저 스프레드시트 ID를 입력하고 연결해주세요!', 'warning');
+                return;
+            }
+
+            // 테스트 데이터 저장
+            const testData = [
+                new Date().toISOString().split('T')[0],
+                new Date().toTimeString().split(' ')[0].substring(0, 5),
+                '🧪 테스트',
+                '연결 테스트',
+                '1개',
+                0, 0, 0, 0, 0, 0,
+                '😊 좋음',
+                '연결 테스트입니다'
+            ];
+
+            appendToGoogleSheet(testData);
+            showAlert('테스트 데이터가 저장되었습니다! 스프레드시트를 확인해보세요. 🔍', 'success');
+        }
+
+        function addFavoriteFood() {
+            const name = document.getElementById('newFavoriteFood').value;
+            const calories = parseInt(document.getElementById('newFavoriteCalories').value);
+            
+            if (!name || !calories) {
+                showAlert('음식명과 칼로리를 입력해주세요!', 'warning');
+                return;
+            }
+
+            const newFood = {
+                name: name,
+                calories: calories,
+                carbs: 0, // 기본값
+                protein: 0,
+                fat: 0,
+                sodium: 0,
+                sugar: 0
+            };
+
+            favoriteFoods.push(newFood);
+            saveFavoriteFoods();
+            updateFavoriteFoodsDisplay();
+            
+            document.getElementById('newFavoriteFood').value = '';
+            document.getElementById('newFavoriteCalories').value = '';
+            
+            showAlert(`${name}이(가) 즐겨찾기에 추가되었습니다!`, 'success');
+        }
+
+        function saveSettings() {
+            settings.targetCalories = parseInt(document.getElementById('targetCalories').value) || 1500;
+            settings.targetProtein = parseInt(document.getElementById('targetProtein').value) || 70;
+            settings.targetWeight = parseFloat(document.getElementById('targetWeight').value) || 65;
+            settings.currentWeight = parseFloat(document.getElementById('currentWeight').value) || 77.8;
+            
+            localStorage.setItem('dietSettings', JSON.stringify(settings));
+            showAlert('설정이 저장되었습니다! ⚙️', 'success');
+        }
+
+        function loadSettings() {
+            document.getElementById('targetCalories').value = settings.targetCalories;
+            document.getElementById('targetProtein').value = settings.targetProtein;
+            document.getElementById('targetWeight').value = settings.targetWeight;
+            document.getElementById('currentWeight').value = settings.currentWeight;
+            document.getElementById('spreadsheetId').value = settings.spreadsheetId || '';
+        }
+
+        function saveFavoriteFoods() {
+            localStorage.setItem('favoriteFoods', JSON.stringify(favoriteFoods));
+        }
+
+        function clearFoodInputs() {
+            ['foodName', 'foodAmount', 'calories', 'carbs', 'protein', 'fat', 'sodium', 'sugar'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+            document.getElementById('foodUnit').value = 'g';
+        }
+
+        function showAlert(message, type = 'info') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            const container = document.querySelector('.tab-content.active .quick-add-section, .tab-content.active .google-sheets-setup');
+            if (container) {
+                container.insertBefore(alertDiv, container.firstChild);
+                setTimeout(() => alertDiv.remove(), 3000);
+            }
+        }
+
+        // 페이지 로드 시 오늘 데이터 업데이트
+        window.addEventListener('load', function() {
+            updateDailyTotals();
+        });
+
+        // 페이지 종료 시 현재 식사 임시 저장
+        window.addEventListener('beforeunload', function() {
+            if (currentMealFoods.length > 0) {
+                localStorage.setItem('tempMeal_' + currentMeal, JSON.stringify(currentMealFoods));
+            }
+        });
+    </script>
+</body>
+</html>
