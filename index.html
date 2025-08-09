@@ -9,6 +9,38 @@
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+        function updateDateDisplay() {
+            const dateInput = document.getElementById('mealDate');
+            if (!dateInput) return;
+            
+            selectedDate = dateInput.value;
+            const selected = new Date(selectedDate + 'T00:00:00');
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            const helper = document.getElementById('dateHelper');
+            if (!helper) return;
+            
+            if (selectedDate === today.toISOString().split('T')[0]) {
+                helper.textContent = '📅 오늘 식사를 기록합니다';
+                helper.style.color = '#28a745';
+            } else if (selectedDate === yesterday.toISOString().split('T')[0]) {
+                helper.textContent = '📅 어제 식사를 기록합니다';
+                helper.style.color = '#ffc107';
+            } else if (selected < today) {
+                const diffDays = Math.ceil((today - selected) / (1000 * 60 * 60 * 24));
+                helper.textContent = `📅 ${diffDays}일 전 식사를 기록합니다`;
+                helper.style.color = '#6c757d';
+            } else {
+                helper.textContent = '📅 미래 날짜는 선택할 수 없습니다';
+                helper.style.color = '#dc3545';
+            }
+            
+            // 선택된 날짜가 변경되면 현재 식사 초기화 및 데이터 업데이트
+            currentMealFoods = [];
+            updateMealDisplay();
+            updateDailyTotals();
         }
 
         body {
@@ -498,6 +530,13 @@
         <!-- 식사 기록 탭 -->
         <div id="food" class="tab-content active">
             <div class="quick-add-section">
+                <!-- 날짜 선택 -->
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">📅 식사 날짜 선택</label>
+                    <input type="date" id="mealDate" style="width: 100%; padding: 10px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 1rem;" onchange="updateDateDisplay()">
+                    <div id="dateHelper" style="font-size: 0.8rem; color: #666; margin-top: 5px;"></div>
+                </div>
+
                 <div class="meal-selector">
                     <button class="meal-btn active" data-meal="breakfast">🌅 아침</button>
                     <button class="meal-btn" data-meal="lunch">☀️ 점심</button>
@@ -654,11 +693,17 @@
     </div>
 
     <script>
+        // 전역 에러 핸들러 추가
+        window.addEventListener('error', function(e) {
+            console.error('전역 에러:', e.error, e.message, e.filename, e.lineno);
+        });
+
         // 전역 변수
         let currentMeal = 'breakfast';
         let currentMealFoods = [];
-        let settings = JSON.parse(localStorage.getItem('dietSettings') || '{"targetCalories": 1500, "targetProtein": 70, "targetWeight": 65, "currentWeight": 77.8, "spreadsheetId": ""}');
-        let favoriteFoods = JSON.parse(localStorage.getItem('favoriteFoods') || '[]');
+        let selectedDate = new Date().toISOString().split('T')[0]; // 기본값: 오늘
+        let settings = {};
+        let favoriteFoods = [];
         let dailyTotals = { calories: 0, carbs: 0, protein: 0, fat: 0, sodium: 0, sugar: 0 };
 
         // 기본 즐겨찾는 음식들
@@ -673,29 +718,134 @@
             { name: "🍢 떡볶이", calories: 320, carbs: 55, protein: 8, fat: 8, isStress: true }
         ];
 
+        // 안전한 로컬스토리지 접근 함수
+        function safeGetLocalStorage(key, defaultValue) {
+            try {
+                const item = localStorage.getItem(key);
+                return item ? JSON.parse(item) : defaultValue;
+            } catch (e) {
+                console.error('로컬스토리지 읽기 오류:', e);
+                return defaultValue;
+            }
+        }
+
+        function safeSetLocalStorage(key, value) {
+            try {
+                localStorage.setItem(key, JSON.stringify(value));
+                return true;
+            } catch (e) {
+                console.error('로컬스토리지 쓰기 오류:', e);
+                return false;
+            }
+        }
+
         // 초기화
         document.addEventListener('DOMContentLoaded', function() {
-            initializeApp();
+            console.log('DOM 로드 완료, 초기화 시작...');
+            
+            try {
+                // 안전하게 설정 로드
+                settings = safeGetLocalStorage('dietSettings', {
+                    targetCalories: 1500, 
+                    targetProtein: 70, 
+                    targetWeight: 65, 
+                    currentWeight: 77.8, 
+                    spreadsheetId: ""
+                });
+                
+                favoriteFoods = safeGetLocalStorage('favoriteFoods', []);
+                
+                initializeApp();
+            } catch (error) {
+                console.error('초기화 중 에러:', error);
+                showAlert('초기화 중 오류가 발생했습니다. 페이지를 새로고침해주세요.', 'error');
+            }
         });
 
-        function initializeApp() {
-            // 기본 즐겨찾는 음식이 없으면 추가
-            if (favoriteFoods.length === 0) {
-                favoriteFoods = defaultFavoriteFoods;
-                saveFavoriteFoods();
+        function updateDateDisplay() {
+            try {
+                const dateInput = document.getElementById('mealDate');
+                if (!dateInput) {
+                    console.log('날짜 입력 요소를 찾을 수 없음');
+                    return;
+                }
+                
+                selectedDate = dateInput.value;
+                const selected = new Date(selectedDate + 'T00:00:00');
+                const today = new Date();
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
+                
+                const helper = document.getElementById('dateHelper');
+                if (!helper) {
+                    console.log('날짜 도움말 요소를 찾을 수 없음');
+                    return;
+                }
+                
+                if (selectedDate === today.toISOString().split('T')[0]) {
+                    helper.textContent = '📅 오늘 식사를 기록합니다';
+                    helper.style.color = '#28a745';
+                } else if (selectedDate === yesterday.toISOString().split('T')[0]) {
+                    helper.textContent = '📅 어제 식사를 기록합니다';
+                    helper.style.color = '#ffc107';
+                } else if (selected < today) {
+                    const diffDays = Math.ceil((today - selected) / (1000 * 60 * 60 * 24));
+                    helper.textContent = `📅 ${diffDays}일 전 식사를 기록합니다`;
+                    helper.style.color = '#6c757d';
+                } else {
+                    helper.textContent = '📅 미래 날짜는 선택할 수 없습니다';
+                    helper.style.color = '#dc3545';
+                }
+                
+                // 선택된 날짜가 변경되면 현재 식사 초기화 및 데이터 업데이트
+                currentMealFoods = [];
+                updateMealDisplay();
+                updateDailyTotals();
+            } catch (error) {
+                console.error('날짜 표시 업데이트 오류:', error);
             }
+        }
 
-            loadSettings();
-            updateFavoriteFoodsDisplay();
-            updateMealDisplay();
-            checkGoogleSheetConnection();
-            
-            // 식사 선택 이벤트
-            document.querySelectorAll('.meal-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    selectMeal(this.dataset.meal);
+        function initializeApp() {
+            try {
+                console.log('앱 초기화 시작...');
+                
+                // 기본 즐겨찾는 음식이 없으면 추가
+                if (!favoriteFoods || favoriteFoods.length === 0) {
+                    favoriteFoods = [...defaultFavoriteFoods];
+                    saveFavoriteFoods();
+                }
+
+                // 날짜 초기화 (오늘 날짜로 설정)
+                const dateInput = document.getElementById('mealDate');
+                if (dateInput) {
+                    dateInput.value = selectedDate;
+                    updateDateDisplay();
+                } else {
+                    console.log('날짜 입력 요소를 찾을 수 없음');
+                }
+
+                loadSettings();
+                updateFavoriteFoodsDisplay();
+                updateMealDisplay();
+                checkGoogleSheetConnection();
+                updateDailyTotals();
+                
+                // 식사 선택 이벤트
+                const mealBtns = document.querySelectorAll('.meal-btn');
+                console.log('식사 버튼 개수:', mealBtns.length);
+                
+                mealBtns.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        selectMeal(this.dataset.meal);
+                    });
                 });
-            });
+                
+                console.log('앱 초기화 완료!');
+            } catch (error) {
+                console.error('초기화 오류:', error);
+                showAlert('앱 초기화 중 오류가 발생했습니다.', 'error');
+            }
         }
 
         function switchTab(tabName) {
@@ -704,6 +854,29 @@
             
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
+        }
+
+        function selectMeal(mealType) {
+            try {
+                console.log('식사 선택:', mealType);
+                
+                // 현재 식사가 바뀔 때 임시 저장된 음식들 초기화
+                if (currentMeal !== mealType) {
+                    currentMealFoods = [];
+                    currentMeal = mealType;
+                    
+                    // 버튼 활성화 상태 변경
+                    document.querySelectorAll('.meal-btn').forEach(btn => btn.classList.remove('active'));
+                    const selectedBtn = document.querySelector(`[data-meal="${mealType}"]`);
+                    if (selectedBtn) {
+                        selectedBtn.classList.add('active');
+                    }
+                    
+                    updateMealDisplay();
+                }
+            } catch (error) {
+                console.error('식사 선택 오류:', error);
+            }
         }
 
         function selectMeal(mealType) {
@@ -720,85 +893,129 @@
         }
 
         function addFoodToCurrentMeal() {
-            const foodData = {
-                name: document.getElementById('foodName').value,
-                amount: document.getElementById('foodAmount').value,
-                unit: document.getElementById('foodUnit').value,
-                calories: parseInt(document.getElementById('calories').value) || 0,
-                carbs: parseFloat(document.getElementById('carbs').value) || 0,
-                protein: parseFloat(document.getElementById('protein').value) || 0,
-                fat: parseFloat(document.getElementById('fat').value) || 0,
-                sodium: parseFloat(document.getElementById('sodium').value) || 0,
-                sugar: parseFloat(document.getElementById('sugar').value) || 0
-            };
+            try {
+                const foodData = {
+                    name: document.getElementById('foodName').value,
+                    amount: document.getElementById('foodAmount').value,
+                    unit: document.getElementById('foodUnit').value,
+                    calories: parseInt(document.getElementById('calories').value) || 0,
+                    carbs: parseFloat(document.getElementById('carbs').value) || 0,
+                    protein: parseFloat(document.getElementById('protein').value) || 0,
+                    fat: parseFloat(document.getElementById('fat').value) || 0,
+                    sodium: parseFloat(document.getElementById('sodium').value) || 0,
+                    sugar: parseFloat(document.getElementById('sugar').value) || 0
+                };
 
-            if (!foodData.name || !foodData.amount) {
-                showAlert('음식 이름과 양은 필수입니다!', 'warning');
-                return;
+                if (!foodData.name || !foodData.amount) {
+                    showAlert('음식 이름과 양은 필수입니다!', 'warning');
+                    return;
+                }
+
+                currentMealFoods.push(foodData);
+                updateMealDisplay();
+                clearFoodInputs();
+                
+                const mealNames = {
+                    breakfast: '아침',
+                    lunch: '점심',
+                    dinner: '저녁',
+                    snack: '간식'
+                };
+                
+                showAlert(`${foodData.name}이(가) ${mealNames[currentMeal]}에 추가되었습니다!`, 'success');
+            } catch (error) {
+                console.error('음식 추가 오류:', error);
+                showAlert('음식 추가 중 오류가 발생했습니다.', 'error');
             }
-
-            currentMealFoods.push(foodData);
-            updateMealDisplay();
-            clearFoodInputs();
-            showAlert(`${foodData.name}이(가) 현재 식사에 추가되었습니다!`, 'success');
         }
 
         function addFavoriteFoodToMeal(food) {
-            const foodData = {
-                ...food,
-                amount: food.defaultAmount || 1,
-                unit: food.defaultUnit || '개'
-            };
-            
-            currentMealFoods.push(foodData);
-            updateMealDisplay();
-            showAlert(`${food.name}이(가) 현재 식사에 추가되었습니다!`, 'success');
+            try {
+                const foodData = {
+                    ...food,
+                    amount: food.defaultAmount || 1,
+                    unit: food.defaultUnit || '개'
+                };
+                
+                currentMealFoods.push(foodData);
+                updateMealDisplay();
+                
+                const mealNames = {
+                    breakfast: '아침',
+                    lunch: '점심',
+                    dinner: '저녁',
+                    snack: '간식'
+                };
+                
+                showAlert(`${food.name}이(가) ${mealNames[currentMeal]}에 추가되었습니다!`, 'success');
+            } catch (error) {
+                console.error('즐겨찾는 음식 추가 오류:', error);
+                showAlert('음식 추가 중 오류가 발생했습니다.', 'error');
+            }
         }
 
         function removeFoodFromMeal(index) {
-            currentMealFoods.splice(index, 1);
-            updateMealDisplay();
+            try {
+                currentMealFoods.splice(index, 1);
+                updateMealDisplay();
+                showAlert('음식이 제거되었습니다.', 'success');
+            } catch (error) {
+                console.error('음식 제거 오류:', error);
+            }
         }
 
         function updateMealDisplay() {
-            const mealNames = {
-                breakfast: '🌅 아침',
-                lunch: '☀️ 점심',
-                dinner: '🌙 저녁',
-                snack: '🍿 간식'
-            };
+            try {
+                const mealNames = {
+                    breakfast: '🌅 아침',
+                    lunch: '☀️ 점심',
+                    dinner: '🌙 저녁',
+                    snack: '🍿 간식'
+                };
 
-            document.querySelector('.current-meal-title').textContent = `${mealNames[currentMeal]} 메뉴`;
-            
-            const listContainer = document.getElementById('currentMealList');
-            
-            if (currentMealFoods.length === 0) {
-                listContainer.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">아직 추가된 음식이 없어요</div>';
-                document.getElementById('saveMealBtn').disabled = true;
-            } else {
-                let totalCalories = 0;
-                listContainer.innerHTML = currentMealFoods.map((food, index) => {
-                    totalCalories += food.calories;
-                    return `
-                        <div class="meal-food-item">
-                            <div class="food-info">
-                                <div class="food-name">${food.name}</div>
-                                <div class="food-details">${food.amount}${food.unit} | 탄${food.carbs}g 단${food.protein}g 지${food.fat}g</div>
+                const titleElement = document.querySelector('.current-meal-title');
+                if (titleElement) {
+                    titleElement.textContent = `${mealNames[currentMeal]} 메뉴`;
+                }
+                
+                const listContainer = document.getElementById('currentMealList');
+                if (!listContainer) {
+                    console.log('식사 리스트 컨테이너를 찾을 수 없음');
+                    return;
+                }
+                
+                if (currentMealFoods.length === 0) {
+                    listContainer.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">아직 추가된 음식이 없어요</div>';
+                    const saveMealBtn = document.getElementById('saveMealBtn');
+                    if (saveMealBtn) saveMealBtn.disabled = true;
+                } else {
+                    let totalCalories = 0;
+                    listContainer.innerHTML = currentMealFoods.map((food, index) => {
+                        totalCalories += food.calories;
+                        return `
+                            <div class="meal-food-item">
+                                <div class="food-info">
+                                    <div class="food-name">${food.name}</div>
+                                    <div class="food-details">${food.amount}${food.unit} | 탄${food.carbs}g 단${food.protein}g 지${food.fat}g</div>
+                                </div>
+                                <div class="food-calories">${food.calories}kcal</div>
+                                <button class="remove-food-btn" onclick="removeFoodFromMeal(${index})">🗑️</button>
                             </div>
-                            <div class="food-calories">${food.calories}kcal</div>
-                            <button class="remove-food-btn" onclick="removeFoodFromMeal(${index})">🗑️</button>
+                        `;
+                    }).join('');
+                    
+                    // 총 칼로리 표시
+                    listContainer.innerHTML += `
+                        <div style="text-align: center; margin-top: 10px; padding: 10px; background: #667eea; color: white; border-radius: 8px; font-weight: bold;">
+                            총 ${totalCalories}kcal
                         </div>
                     `;
-                }).join('');
-                
-                // 총 칼로리 표시
-                listContainer.innerHTML += `
-                    <div style="text-align: center; margin-top: 10px; padding: 10px; background: #667eea; color: white; border-radius: 8px; font-weight: bold;">
-                        총 ${totalCalories}kcal
-                    </div>
-                `;
-                
-                document.getElementById('saveMealBtn').disabled = false;
+                    
+                    const saveMealBtn = document.getElementById('saveMealBtn');
+                    if (saveMealBtn) saveMealBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('식사 표시 업데이트 오류:', error);
             }
         }
 
@@ -813,9 +1030,16 @@
                 return;
             }
 
+            // 미래 날짜 체크
+            const selected = new Date(selectedDate + 'T00:00:00');
+            const today = new Date();
+            if (selected > today) {
+                showAlert('미래 날짜의 식사는 저장할 수 없습니다!', 'warning');
+                return;
+            }
+
             try {
                 const now = new Date();
-                const dateStr = now.toISOString().split('T')[0];
                 const timeStr = now.toTimeString().split(' ')[0].substring(0, 5);
                 
                 const mealNames = {
@@ -825,10 +1049,10 @@
                     snack: '🍿 간식'
                 };
 
-                // 각 음식을 개별 행으로 저장
+                // 각 음식을 개별 행으로 저장 (선택된 날짜 사용)
                 for (const food of currentMealFoods) {
                     const rowData = [
-                        dateStr,
+                        selectedDate, // 선택된 날짜 사용
                         timeStr,
                         mealNames[currentMeal],
                         food.name,
@@ -840,7 +1064,7 @@
                         food.sodium,
                         food.sugar,
                         '', // 기분
-                        ''  // 메모
+                        selectedDate === new Date().toISOString().split('T')[0] ? '' : '(나중에 추가됨)' // 메모
                     ];
 
                     await appendToGoogleSheet(rowData);
@@ -849,7 +1073,8 @@
                 // 로컬 총합 업데이트
                 updateDailyTotals();
                 
-                showAlert(`${mealNames[currentMeal]} 식사가 구글시트에 저장되었습니다! (${currentMealFoods.length}개 음식)`, 'success');
+                const dateText = selectedDate === new Date().toISOString().split('T')[0] ? '오늘' : selectedDate;
+                showAlert(`${dateText} ${mealNames[currentMeal]} 식사가 구글시트에 저장되었습니다! (${currentMealFoods.length}개 음식)`, 'success');
                 
                 // 저장 후 현재 식사 초기화
                 currentMealFoods = [];
@@ -878,12 +1103,11 @@
 
         function updateDailyTotals() {
             const allData = JSON.parse(localStorage.getItem('sheetData') || '[]');
-            const today = new Date().toISOString().split('T')[0];
             
             dailyTotals = { calories: 0, carbs: 0, protein: 0, fat: 0, sodium: 0, sugar: 0 };
             
             allData.forEach(entry => {
-                if (entry.data[0] === today) { // 오늘 날짜 데이터만
+                if (entry.data[0] === selectedDate && !entry.isHeader) { // 선택된 날짜 데이터만
                     dailyTotals.calories += entry.data[5] || 0;
                     dailyTotals.carbs += entry.data[6] || 0;
                     dailyTotals.protein += entry.data[7] || 0;
@@ -897,10 +1121,19 @@
         }
 
         function updateDailySummary() {
+            const isToday = selectedDate === new Date().toISOString().split('T')[0];
+            const datePrefix = isToday ? '오늘' : selectedDate;
+            
             document.getElementById('todayCalories').textContent = Math.round(dailyTotals.calories);
             document.getElementById('todayCarbs').textContent = Math.round(dailyTotals.carbs) + 'g';
             document.getElementById('todayProtein').textContent = Math.round(dailyTotals.protein) + 'g';
             document.getElementById('todayFat').textContent = Math.round(dailyTotals.fat) + 'g';
+            
+            // 요약 카드 제목도 업데이트 (첫 번째 카드만)
+            const firstSummaryLabel = document.querySelector('.summary-card .summary-label');
+            if (firstSummaryLabel) {
+                firstSummaryLabel.textContent = isToday ? '오늘 칼로리' : `${selectedDate} 칼로리`;
+            }
             
             // 진행률 업데이트
             const calorieProgress = Math.min((dailyTotals.calories / settings.targetCalories) * 100, 100);
@@ -1015,21 +1248,41 @@
         }
 
         function saveSettings() {
-            settings.targetCalories = parseInt(document.getElementById('targetCalories').value) || 1500;
-            settings.targetProtein = parseInt(document.getElementById('targetProtein').value) || 70;
-            settings.targetWeight = parseFloat(document.getElementById('targetWeight').value) || 65;
-            settings.currentWeight = parseFloat(document.getElementById('currentWeight').value) || 77.8;
-            
-            localStorage.setItem('dietSettings', JSON.stringify(settings));
-            showAlert('설정이 저장되었습니다! ⚙️', 'success');
+            try {
+                const targetCaloriesEl = document.getElementById('targetCalories');
+                const targetProteinEl = document.getElementById('targetProtein');
+                const targetWeightEl = document.getElementById('targetWeight');
+                const currentWeightEl = document.getElementById('currentWeight');
+                
+                if (targetCaloriesEl) settings.targetCalories = parseInt(targetCaloriesEl.value) || 1500;
+                if (targetProteinEl) settings.targetProtein = parseInt(targetProteinEl.value) || 70;
+                if (targetWeightEl) settings.targetWeight = parseFloat(targetWeightEl.value) || 65;
+                if (currentWeightEl) settings.currentWeight = parseFloat(currentWeightEl.value) || 77.8;
+                
+                safeSetLocalStorage('dietSettings', settings);
+                showAlert('설정이 저장되었습니다! ⚙️', 'success');
+            } catch (error) {
+                console.error('설정 저장 오류:', error);
+                showAlert('설정 저장 중 오류가 발생했습니다.', 'error');
+            }
         }
 
         function loadSettings() {
-            document.getElementById('targetCalories').value = settings.targetCalories;
-            document.getElementById('targetProtein').value = settings.targetProtein;
-            document.getElementById('targetWeight').value = settings.targetWeight;
-            document.getElementById('currentWeight').value = settings.currentWeight;
-            document.getElementById('spreadsheetId').value = settings.spreadsheetId || '';
+            try {
+                const targetCaloriesEl = document.getElementById('targetCalories');
+                const targetProteinEl = document.getElementById('targetProtein');
+                const targetWeightEl = document.getElementById('targetWeight');
+                const currentWeightEl = document.getElementById('currentWeight');
+                const spreadsheetIdEl = document.getElementById('spreadsheetId');
+                
+                if (targetCaloriesEl) targetCaloriesEl.value = settings.targetCalories;
+                if (targetProteinEl) targetProteinEl.value = settings.targetProtein;
+                if (targetWeightEl) targetWeightEl.value = settings.targetWeight;
+                if (currentWeightEl) currentWeightEl.value = settings.currentWeight;
+                if (spreadsheetIdEl) spreadsheetIdEl.value = settings.spreadsheetId || '';
+            } catch (error) {
+                console.error('설정 로드 오류:', error);
+            }
         }
 
         function saveFavoriteFoods() {
@@ -1063,7 +1316,7 @@
         // 페이지 종료 시 현재 식사 임시 저장
         window.addEventListener('beforeunload', function() {
             if (currentMealFoods.length > 0) {
-                localStorage.setItem('tempMeal_' + currentMeal, JSON.stringify(currentMealFoods));
+                localStorage.setItem('tempMeal_' + currentMeal + '_' + selectedDate, JSON.stringify(currentMealFoods));
             }
         });
     </script>
